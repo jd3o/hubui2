@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  #Website Details
+  pWebsiteFQDN:
+    Type: "String"
+    Description: "The Fully-Qualified Domain Name for the website/application"
+    Default: "myapp.nonprod.pge.com"
+  pRefererValue:
+    Type: 'String'
+    Default: xzC1fcjr0IORrXATPShhzhpyhI3wwB
+    Description: "The referer header value for restricting access to S3 (Will be stored in AWS Secrets Manager) "
+    NoEcho: true
+  pAppID:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /general/appid/pspsviewer
+    Description: "AMPS ApplicationID"
+  pAppName:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /general/appname/pspsviewer
+    Description: "AMPS ApplicationID"
+  pEnv:
+    Type: "String"
+    Description: "Name of Environment"
+  pNotify:
+    Type: 'String'
+    Default: LKG8@PGE.COM
+    Description: "Individual or list to receive operational notifications"
+  pOrderNumber:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /general/order/pspsviewer
+    Description: "Expense Order Number to cover monthly costs"
+  pOrg:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /general/org
+    Description: "Organization / Line-of-Business Sponsoring Workload"
+  pProjectName:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /general/project
+    Description: "Name of Project if different from Application"
+  pCFNOwnerTag:
+    Type: 'String'
+    Description: "CorpID of Table Owner"
+    Default: LKG8
+
+Resources:
+  rWebsiteBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref pWebsiteFQDN
+      BucketEncryption:
+         ServerSideEncryptionConfiguration:
+           - ServerSideEncryptionByDefault:
+               SSEAlgorithm: AES256
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+        - Key: AppID
+          Value: !Ref pAppID
+        - Key: Environment
+          Value: !Ref pEnv
+        - Key: Notify
+          Value: !Ref pNotify
+        - Key: Order
+          Value: !Ref pOrderNumber
+        - Key: Org
+          Value: !Ref pOrg
+        - Key: AppName
+          Value: !Ref pAppName
+
+  rWebsiteBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref rWebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: "Allow Requests"
+            Action:
+              - "s3:GetObject"
+            Effect: "Allow"
+            Resource:
+              - !Join
+                - ""
+                - - "arn:aws:s3:::"
+                  - !Ref rWebsiteBucket
+                  - "/*"
+            Principal: "*"
+            Condition:
+              StringLike:
+                aws:Referer: !Ref pRefererValue
+                aws:UserAgent: Amazon CloudFront
+          - Sid: "Deny Requests"
+            Action:
+              - "s3:GetObject"
+            Effect: "Deny"
+            Resource:
+              - !Join
+                - ""
+                - - "arn:aws:s3:::"
+                  - !Ref rWebsiteBucket
+                  - "/*"
+            Principal: "*"
+            Condition:
+              StringNotLike:
+                aws:Referer: !Ref pRefererValue
+                aws:UserAgent: Amazon CloudHouse
